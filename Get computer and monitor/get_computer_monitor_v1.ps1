@@ -1,12 +1,7 @@
-﻿# 新增：如果BIOS序列号以VMware开头（不区分大小写），直接退出脚本（优化后版本）
-$computerBIOS = Get-CimInstance Win32_BIOS
-if ($computerBIOS.SerialNumber -match '^(?i)vmware') {
-    Write-Host "VMware虚拟机，无需收集信息，脚本退出。" -ForegroundColor Yellow
-    exit 0  # 正常退出，退出码0
-}
-
-# Get current date and format as "yyyy-MM-dd"
-$currentDate = (Get-Date).ToString('yyyy-MM-dd')
+﻿# Get current date and format as "ddMMMyyyy" (compatible with older PowerShell versions)
+$months = @("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+$today = Get-Date
+$currentDate = "{0:d2}{1}{2}" -f $today.Day, $months[$today.Month - 1], $today.Year
 
 # Build base path
 $basePath = "\\fuobohid01\fuoit$\Monitor_Check\$currentDate"
@@ -16,15 +11,9 @@ if (-not (Test-Path -Path $basePath)) {
     New-Item -Path $basePath -ItemType Directory -Force | Out-Null
 }
 
-# v2
-$sourceFile = "\\fuobohid01\fuoit$\Script\_combine_csv_2.ps1"
-if (-not (Test-Path (Join-Path $basePath (Split-Path $sourceFile -Leaf)) -PathType Leaf)) {
-   Copy-Item $sourceFile $basePath -ErrorAction SilentlyContinue 
-   }
-
 # Get system information
-# $computerBIOS = Get-CimInstance Win32_BIOS
 $computerSystem = Get-CimInstance Win32_ComputerSystem
+$computerBIOS = Get-CimInstance Win32_BIOS
 $computerMonitor = Get-CimInstance WmiMonitorID -Namespace root\wmi
 
 # Get username
@@ -32,20 +21,6 @@ $myusername = ($computerSystem).username -split "\\" | Select-Object -Last 1
 if (-not $myusername) {
     $myusername = ((gcim win32_userprofile | ?{$_.loaded -eq 1 -and $_.Special -eq 0}).localpath).split("\")[2]
 }
-
-# Get active IPv4 addresses for the computer
-$ipAddresses = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress -notmatch '^(127|169\.254)\.' -and $_.InterfaceAlias -notmatch 'vEthernet|Loopback|Teredo' } |
-    Select-Object -ExpandProperty IPAddress
-
-if (-not $ipAddresses) {
-    $ipAddresses = Get-CimInstance Win32_NetworkAdapterConfiguration |
-        Where-Object { $_.IPEnabled -and $_.IPAddress } |
-        ForEach-Object { $_.IPAddress } |
-        Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' -and $_ -notmatch '^(127|169\.254)\.' }
-}
-
-$ipAddresses = @($ipAddresses) -join '; '
 
 # Modify UserName based on conditions
 if ($myusername -eq "apple.wang" -and $computerBIOS.SerialNumber -ne "1P547M3") {
@@ -69,7 +44,6 @@ $basicInfo = [PSCustomObject]@{
     'ComManufacturer' = $computerSystem.Manufacturer
     'ComputerModel' = $computerSystem.Model
     'ComputerServiceTag' = $computerBIOS.SerialNumber
-    'IPAddress' = $ipAddresses
     'MonManufacturerName' = $null
     'MonitorModel' = $null
     'MonitorSerialNumber' = $null
@@ -93,7 +67,6 @@ $monitorData = foreach ($monitor in $computerMonitor) {
         'ComManufacturer' = $computerSystem.Manufacturer
         'ComputerModel' = $computerSystem.Model
         'ComputerServiceTag' = $computerBIOS.SerialNumber
-        'IPAddress' = $ipAddresses
         'MonManufacturerName' = $monManufacturer
         'MonitorModel' = $monModel
         'MonitorSerialNumber' = $monSerial
@@ -107,7 +80,7 @@ $allData = @($basicInfo) + $monitorData
 # Build file name
 $monitorSerials = $monitorData | ForEach-Object { $_.MonitorSerialNumber }
 $serialString = ($monitorSerials -join '_') -replace '[^\w]', ''
-$mypath = "$basePath\$($myusername)_$($computerSystem.Name)_$serialString.csv" -replace '[^\w$\\.\-:]', ''
+$mypath = "$basePath\$($myusername)_$($computerSystem.Name)_$serialString.csv" -replace '[^\w$\\.:]', ''
 
 $allData
 

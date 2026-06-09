@@ -5,8 +5,10 @@ if ($computerBIOS.SerialNumber -match '^(?i)vmware') {
     exit 0  # 正常退出，退出码0
 }
 
-# Get current date and format as "yyyy-MM-dd"
-$currentDate = (Get-Date).ToString('yyyy-MM-dd')
+# Get current date and format as "ddMMMyyyy" (compatible with older PowerShell versions)
+$months = @("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+$today = Get-Date
+$currentDate = "{0:d2}{1}{2}" -f $today.Day, $months[$today.Month - 1], $today.Year
 
 # Build base path
 $basePath = "\\fuobohid01\fuoit$\Monitor_Check\$currentDate"
@@ -33,20 +35,6 @@ if (-not $myusername) {
     $myusername = ((gcim win32_userprofile | ?{$_.loaded -eq 1 -and $_.Special -eq 0}).localpath).split("\")[2]
 }
 
-# Get active IPv4 addresses for the computer
-$ipAddresses = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress -notmatch '^(127|169\.254)\.' -and $_.InterfaceAlias -notmatch 'vEthernet|Loopback|Teredo' } |
-    Select-Object -ExpandProperty IPAddress
-
-if (-not $ipAddresses) {
-    $ipAddresses = Get-CimInstance Win32_NetworkAdapterConfiguration |
-        Where-Object { $_.IPEnabled -and $_.IPAddress } |
-        ForEach-Object { $_.IPAddress } |
-        Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' -and $_ -notmatch '^(127|169\.254)\.' }
-}
-
-$ipAddresses = @($ipAddresses) -join '; '
-
 # Modify UserName based on conditions
 if ($myusername -eq "apple.wang" -and $computerBIOS.SerialNumber -ne "1P547M3") {
     $myusername = "apple.wang.k"
@@ -69,7 +57,6 @@ $basicInfo = [PSCustomObject]@{
     'ComManufacturer' = $computerSystem.Manufacturer
     'ComputerModel' = $computerSystem.Model
     'ComputerServiceTag' = $computerBIOS.SerialNumber
-    'IPAddress' = $ipAddresses
     'MonManufacturerName' = $null
     'MonitorModel' = $null
     'MonitorSerialNumber' = $null
@@ -93,7 +80,6 @@ $monitorData = foreach ($monitor in $computerMonitor) {
         'ComManufacturer' = $computerSystem.Manufacturer
         'ComputerModel' = $computerSystem.Model
         'ComputerServiceTag' = $computerBIOS.SerialNumber
-        'IPAddress' = $ipAddresses
         'MonManufacturerName' = $monManufacturer
         'MonitorModel' = $monModel
         'MonitorSerialNumber' = $monSerial
@@ -107,7 +93,7 @@ $allData = @($basicInfo) + $monitorData
 # Build file name
 $monitorSerials = $monitorData | ForEach-Object { $_.MonitorSerialNumber }
 $serialString = ($monitorSerials -join '_') -replace '[^\w]', ''
-$mypath = "$basePath\$($myusername)_$($computerSystem.Name)_$serialString.csv" -replace '[^\w$\\.\-:]', ''
+$mypath = "$basePath\$($myusername)_$($computerSystem.Name)_$serialString.csv" -replace '[^\w$\\.:]', ''
 
 $allData
 
