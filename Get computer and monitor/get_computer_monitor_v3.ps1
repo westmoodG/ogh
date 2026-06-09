@@ -33,6 +33,21 @@ if (-not $myusername) {
     $myusername = ((gcim win32_userprofile | ?{$_.loaded -eq 1 -and $_.Special -eq 0}).localpath).split("\")[2]
 }
 
+# Modify UserName based on conditions
+if ($myusername -eq "apple.wang" -and $computerBIOS.SerialNumber -ne "1P547M3") {
+    $myusername = "apple.wang.k"
+} elseif ($myusername -eq "windy.li" -and $computerBIOS.SerialNumber -ne "14G8XC4") {
+    $myusername = "windy.li.k"
+} elseif ($myusername -eq "jerry.chen" -and $computerBIOS.SerialNumber -ne "3MD8XC4") {
+    $myusername = "jerry.chen.k"
+} elseif ($myusername -eq "leo.jiang" -and $computerBIOS.SerialNumber -ne "4LS9H24") {
+    $myusername = "leo.jiang.k"
+} elseif ($myusername -eq "ryan.lin" -and $computerBIOS.SerialNumber -ne "2MD8XC4") {
+    $myusername = "ryan.lin.k"
+}elseif ($myusername -eq "jay.zhou" -and $computerBIOS.SerialNumber -ne "CNFUODG2G8XC4") {
+    $myusername = "jay.zhou.k"
+}
+
 # Get active IPv4 addresses for the computer
 $ipAddresses = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object { $_.IPAddress -notmatch '^(127|169\.254)\.' -and $_.InterfaceAlias -notmatch 'vEthernet|Loopback|Teredo' } |
@@ -46,21 +61,6 @@ if (-not $ipAddresses) {
 }
 
 $ipAddresses = @($ipAddresses) -join '; '
-
-# Modify UserName based on conditions
-if ($myusername -eq "apple.wang" -and $computerBIOS.SerialNumber -ne "1P547M3") {
-    $myusername = "apple.wang.k"
-} elseif ($myusername -eq "windy.li" -and $computerBIOS.SerialNumber -ne "14G8XC4") {
-    $myusername = "windy.li.k"
-} elseif ($myusername -eq "jerry.chen" -and $computerBIOS.SerialNumber -ne "3MD8XC4") {
-    $myusername = "jerry.chen.k"
-} elseif ($myusername -eq "leo.jiang" -and $computerBIOS.SerialNumber -ne "4LS9H24") {
-    $myusername = "leo.jiang.k"
-} elseif ($myusername -eq "ryan.lin" -and $computerBIOS.SerialNumber -ne "2MD8XC4") {
-    $myusername = "ryan.lin.k"
-} elseif ($myusername -eq "jack.ou" -and $computerBIOS.SerialNumber -ne "13HZS44") {
-    $myusername = "Nobody"
-}
 
 # Computer basic information
 $basicInfo = [PSCustomObject]@{
@@ -98,6 +98,15 @@ $monitorData = foreach ($monitor in $computerMonitor) {
         'MonitorModel' = $monModel
         'MonitorSerialNumber' = $monSerial
         'DeviceType' = 'Monitor'
+    }
+}
+
+# If the user is jack.ou, set to Nobody unless one of the allowed monitor serials is present
+if ($myusername -eq "jack.ou") {
+    $validMonitorSerials = @('59L59M3', 'HMJ1V69SBCMB')
+    $monitorSerials = $monitorData | ForEach-Object { $_.MonitorSerialNumber }
+    if (-not ($monitorSerials | Where-Object { $validMonitorSerials -contains $_ })) {
+        $myusername = "Nobody"
     }
 }
 
